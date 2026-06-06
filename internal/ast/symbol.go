@@ -16,6 +16,7 @@ type Symbol struct {
 	Members          SymbolTable
 	Exports          SymbolTable
 	id               atomic.Uint64
+	MergeId          atomic.Uint32 // Non-zero only for symbols recorded in a checker's mergedSymbols slice
 	Parent           *Symbol
 	ExportSymbol     *Symbol
 }
