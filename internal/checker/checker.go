@@ -25663,7 +25663,13 @@ func (c *Checker) addTypeToUnion(typeSet []*Type, includes TypeFlags, t *Type) (
 				includes |= TypeFlagsIncludesNonWideningType
 			}
 		} else {
-			if index, ok := slices.BinarySearchFunc(typeSet, t, CompareTypes); !ok {
+			// Types are usually added in ascending order (flattening an already-sorted union into
+			// the set, or constructing a union from constituents that were produced in order), so
+			// first check whether the new type simply belongs at the end. When it does, this saves
+			// the binary search; when it does not, it costs one extra comparison.
+			if n := len(typeSet); n == 0 || CompareTypes(typeSet[n-1], t) < 0 {
+				typeSet = append(typeSet, t)
+			} else if index, ok := slices.BinarySearchFunc(typeSet, t, CompareTypes); !ok {
 				typeSet = slices.Insert(typeSet, index, t)
 			}
 		}
