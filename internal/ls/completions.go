@@ -3911,7 +3911,7 @@ func setMemberDeclaredBySpreadAssignment(declaration *ast.Node, members *collect
 	}
 	var properties []*ast.Symbol
 	if t != nil && t.Flags()&checker.TypeFlagsStructuredType != 0 {
-		properties = t.AsStructuredType().Properties()
+		properties = typeChecker.GetPropertiesOfType(t)
 	}
 	for _, property := range properties {
 		members.Add(property.Name)

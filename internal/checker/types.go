@@ -906,8 +906,20 @@ type StructuredType struct {
 	signatures         []*Signature // Signatures (call + construct)
 	callSignatureCount int          // Count of call signatures
 	indexInfos         []*IndexInfo
+	// Lazy member instantiation: when non-nil, members/properties are populated on demand
+	// from source via mapper. members acts as a partial cache; properties is nil until forced.
+	lazyMembers *lazyMemberSource
 
 	objectTypeWithoutAbstractConstructSignatures *Type
+}
+
+// lazyMemberSource holds the recipe for instantiating members of a generic object type
+// on demand instead of eagerly walking every declared member up front.
+type lazyMemberSource struct {
+	source   ast.SymbolTable // uninstantiated source members (named-member filtered on lookup)
+	mapper   *TypeMapper
+	thisOnly bool  // mappingThisOnly: skip instantiation for thisless symbols
+	probed   uint8 // 0 = unknown, 1 = source has at least one named member, 2 = source has none
 }
 
 func (t *StructuredType) AsStructuredType() *StructuredType { return t }

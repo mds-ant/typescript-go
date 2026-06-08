@@ -678,7 +678,25 @@ func (c *Checker) elaborateArrowFunction(node *ast.Node, source *Type, target *T
 func (c *Checker) isWeakType(t *Type) bool {
 	if t.flags&TypeFlagsObject != 0 {
 		resolved := c.resolveStructuredTypeMembers(t)
-		return len(resolved.signatures) == 0 && len(resolved.indexInfos) == 0 && len(resolved.properties) > 0 && core.Every(resolved.properties, func(p *ast.Symbol) bool {
+		if len(resolved.signatures) != 0 || len(resolved.indexInfos) != 0 {
+			return false
+		}
+		// instantiateSymbol preserves Flags (including Optional), so for lazily-instantiated
+		// types we can answer "all properties optional" by inspecting the uninstantiated source
+		// symbols without forcing per-member instantiation.
+		if lazy := resolved.lazyMembers; lazy != nil {
+			hasProps := false
+			for id, src := range lazy.source {
+				if c.isNamedMember(src, id) {
+					hasProps = true
+					if src.Flags&ast.SymbolFlagsOptional == 0 {
+						return false
+					}
+				}
+			}
+			return hasProps
+		}
+		return len(resolved.properties) > 0 && core.Every(resolved.properties, func(p *ast.Symbol) bool {
 			return p.Flags&ast.SymbolFlagsOptional != 0
 		})
 	}
