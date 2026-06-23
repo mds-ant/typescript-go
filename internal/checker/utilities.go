@@ -1179,38 +1179,56 @@ func getSuperContainer(node *ast.Node, stopOnFunctions bool) *ast.Node {
 	}
 }
 
-func forEachYieldExpression(body *ast.Node, visitor func(expr *ast.Node) bool) bool {
-	var traverse func(*ast.Node) bool
-	traverse = func(node *ast.Node) bool {
-		switch node.Kind {
-		case ast.KindYieldExpression:
-			if visitor(node) {
-				return true
-			}
-			operand := node.Expression()
-			if operand == nil {
-				return false
-			}
-			return traverse(operand)
-		case ast.KindEnumDeclaration, ast.KindInterfaceDeclaration, ast.KindModuleDeclaration, ast.KindTypeAliasDeclaration:
-			// These are not allowed inside a generator now, but eventually they may be allowed
-			// as local types. Regardless, skip them to avoid the work.
-		default:
-			if ast.IsFunctionLike(node) {
-				if node.Name() != nil && ast.IsComputedPropertyName(node.Name()) {
-					// Note that we will not include methods/accessors of a class because they would require
-					// first descending into the class. This is by design.
-					return traverse(node.Name().Expression())
+type yieldExpressionWalker struct {
+	visitor  func(*ast.Node) bool
+	traverse func(*ast.Node) bool
+}
+
+var yieldExpressionWalkerPool = sync.Pool{
+	New: func() any {
+		// Consolidate state into one allocation.
+		// Similar to https://go.dev/cl/552375.
+		w := &yieldExpressionWalker{}
+		w.traverse = func(node *ast.Node) bool {
+			switch node.Kind {
+			case ast.KindYieldExpression:
+				if w.visitor(node) {
+					return true
 				}
-			} else if !ast.IsPartOfTypeNode(node) {
-				// This is the general case, which should include mostly expressions and statements.
-				// Also includes NodeArrays.
-				return node.ForEachChild(traverse)
+				operand := node.Expression()
+				if operand == nil {
+					return false
+				}
+				return w.traverse(operand)
+			case ast.KindEnumDeclaration, ast.KindInterfaceDeclaration, ast.KindModuleDeclaration, ast.KindTypeAliasDeclaration:
+				// These are not allowed inside a generator now, but eventually they may be allowed
+				// as local types. Regardless, skip them to avoid the work.
+			default:
+				if ast.IsFunctionLike(node) {
+					if node.Name() != nil && ast.IsComputedPropertyName(node.Name()) {
+						// Note that we will not include methods/accessors of a class because they would require
+						// first descending into the class. This is by design.
+						return w.traverse(node.Name().Expression())
+					}
+				} else if !ast.IsPartOfTypeNode(node) {
+					// This is the general case, which should include mostly expressions and statements.
+					// Also includes NodeArrays.
+					return node.ForEachChild(w.traverse)
+				}
 			}
+			return false
 		}
-		return false
-	}
-	return traverse(body)
+		return w
+	},
+}
+
+func forEachYieldExpression(body *ast.Node, visitor func(expr *ast.Node) bool) bool {
+	w := yieldExpressionWalkerPool.Get().(*yieldExpressionWalker)
+	defer yieldExpressionWalkerPool.Put(w)
+	w.visitor = visitor
+	result := w.traverse(body)
+	w.visitor = nil
+	return result
 }
 
 func getEnclosingContainer(node *ast.Node) *ast.Node {
