@@ -1607,7 +1607,9 @@ func (s *Session) handleGetImportAdderEdits(ctx context.Context, params *GetImpo
 		return []*TextEdit{}, nil
 	}
 
-	ch, done := program.GetTypeChecker(ctx)
+	// Symbol handles resolve against the snapshot's persistent API checker (see setupChecker);
+	// acquire that same checker so handle-resolved symbols are not fed to a different one.
+	ch, done := program.GetTypeChecker(core.WithCheckerLifetime(ctx, core.CheckerLifetimeAPI))
 	defer done()
 
 	view := autoimport.NewView(
