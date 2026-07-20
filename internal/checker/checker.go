@@ -665,6 +665,7 @@ type Checker struct {
 	signatureArena                              core.Arena[Signature]
 	indexInfoArena                              core.Arena[IndexInfo]
 	mergedSymbols                               mergedSymbolMap
+	globalObjectMemberNames                     memberNameFilter
 	factory                                     ast.NodeFactory
 	nodeLinks                                   core.LinkStore[*ast.Node, NodeLinks]
 	signatureLinks                              core.LinkStore[*ast.Node, SignatureLinks]
@@ -18834,7 +18835,7 @@ func (c *Checker) getPropertyOfTypeEx(t *Type, name string, skipObjectFunctionPr
 				return symbol
 			}
 		}
-		return c.getPropertyOfObjectType(c.globalObjectType, name)
+		return c.getPropertyOfGlobalObjectType(name)
 	case t.flags&TypeFlagsIntersection != 0:
 		prop := c.getPropertyOfUnionOrIntersectionType(t, name, true /*skipObjectFunctionPropertyAugment*/)
 		if prop != nil {
