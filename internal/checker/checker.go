@@ -676,7 +676,7 @@ type Checker struct {
 	jsxElementLinks                             core.LinkStore[*ast.Node, JsxElementLinks]
 	computedNameLinks                           core.LinkStore[*ast.Node, ComputedNameNodeLinks]
 	symbolReferenceLinks                        core.LinkStore[*ast.Symbol, SymbolReferenceLinks]
-	valueSymbolLinks                            symbolArenaLinkStore[ValueSymbolLinks]
+	binderValueSymbolLinks                      symbolArenaLinkStore[ValueSymbolLinks]
 	mappedSymbolLinks                           core.LinkStore[*ast.Symbol, MappedSymbolLinks]
 	deferredSymbolLinks                         core.LinkStore[*ast.Symbol, DeferredSymbolLinks]
 	aliasSymbolLinks                            core.LinkStore[*ast.Symbol, AliasSymbolLinks]
@@ -905,7 +905,7 @@ func NewChecker(program Program, tracer *Tracer) (*Checker, *sync.Mutex) {
 	c := &Checker{}
 	c.id = nextCheckerID.Add(1)
 	c.symbolNodeLinks.ids = &c.ids
-	c.valueSymbolLinks.ids = &c.ids
+	c.binderValueSymbolLinks.ids = &c.ids
 	c.tracer = tracer
 	c.program = program
 	c.compilerOptions = program.Options()
