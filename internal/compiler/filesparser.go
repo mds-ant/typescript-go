@@ -42,6 +42,9 @@ type parseTask struct {
 	increaseDepth bool
 	elideOnDepth  bool
 
+	loading                 bool // load in progress outside of the parseTaskData lock
+	startSubTasksWhenLoaded bool // subtasks were requested while the task was still loading
+
 	loadedTask        *parseTask
 	allIncludeReasons []*FileIncludeReason
 }
@@ -55,7 +58,6 @@ func (t *parseTask) Path() tspath.Path {
 }
 
 func (t *parseTask) load(loader *fileLoader) {
-	t.loaded = true
 	if t.isForAutomaticTypeDirective {
 		t.loadAutomaticTypeDirectives(loader)
 		return
@@ -243,22 +245,26 @@ func (w *filesParser) parse(loader *fileLoader, tasks []*parseTask) {
 }
 
 func (w *filesParser) start(loader *fileLoader, tasks []*parseTask, depth int) {
-	for i, task := range tasks {
+	for _, task := range tasks {
 		task.path = loader.toPath(task.normalizedFilePath)
 		candidate := getParseTaskData(task)
 		data, loaded := w.taskDataByPath.LoadOrStore(task.path, candidate)
 		if loaded {
 			putParseTaskData(candidate)
+			// A repeated sighting of a path (the same file imported again) usually needs nothing but
+			// the alias to the existing task, so record it here rather than in a goroutine.
+			if data.tryRecordDuplicate(w, task, depth) {
+				continue
+			}
 		}
 
 		w.wg.Queue(func() {
 			data.mu.Lock()
-			defer data.mu.Unlock()
 
 			startSubtasks := false
 			if loaded {
 				if existingTask, ok := data.tasks[task.normalizedFilePath]; ok {
-					tasks[i].loadedTask = existingTask
+					task.loadedTask = existingTask
 				} else {
 					data.tasks[task.normalizedFilePath] = task
 					// This is new task for file name - so load subtasks if there was loading for any other casing
@@ -281,26 +287,85 @@ func (w *filesParser) start(loader *fileLoader, tasks []*parseTask, depth int) {
 			}
 
 			if task.elideOnDepth && currentDepth > w.maxDepth {
+				data.mu.Unlock()
 				return
 			}
 
+			// Claim the tasks that still need loading so the loads run without holding data.mu.
+			var toLoad []*parseTask
 			for _, taskByFileName := range data.tasks {
-				loadSubTasks := startSubtasks
+				if !taskByFileName.loaded && !taskByFileName.loading {
+					taskByFileName.loading = true
+					toLoad = append(toLoad, taskByFileName)
+				}
+			}
+			data.mu.Unlock()
+
+			for _, taskByFileName := range toLoad {
+				taskByFileName.load(loader)
+			}
+
+			data.mu.Lock()
+			for _, taskByFileName := range toLoad {
+				taskByFileName.loaded = true
+				if taskByFileName.redirectedParseTask != nil {
+					data.startedSubTasks = true
+				}
+			}
+			var subTasksToStart [][]*parseTask
+			for _, taskByFileName := range data.tasks {
+				if taskByFileName.startedSubTasks {
+					continue
+				}
+				loadSubTasks := startSubtasks || taskByFileName.startSubTasksWhenLoaded ||
+					taskByFileName.redirectedParseTask != nil && slices.Contains(toLoad, taskByFileName)
+				if !loadSubTasks {
+					continue
+				}
 				if !taskByFileName.loaded {
-					taskByFileName.load(loader)
-					if taskByFileName.redirectedParseTask != nil {
-						// Always load redirected task
-						loadSubTasks = true
-						data.startedSubTasks = true
-					}
+					// Another task is loading this file; it will start the subtasks once loading completes.
+					taskByFileName.startSubTasksWhenLoaded = true
+					continue
 				}
-				if !taskByFileName.startedSubTasks && loadSubTasks {
-					taskByFileName.startedSubTasks = true
-					w.start(loader, taskByFileName.subTasks, data.lowestDepth)
-				}
+				taskByFileName.startedSubTasks = true
+				subTasksToStart = append(subTasksToStart, taskByFileName.subTasks)
+			}
+			lowestDepth := data.lowestDepth
+			data.mu.Unlock()
+
+			for _, subTasks := range subTasksToStart {
+				w.start(loader, subTasks, lowestDepth)
 			}
 		})
 	}
+}
+
+// tryRecordDuplicate records a sighting of a known path when there is nothing else to do for it: the
+// file name is known, the depth is not lower than before, and every task for the path is loaded or
+// loading. Returns false if the sighting needs full processing.
+func (d *parseTaskData) tryRecordDuplicate(w *filesParser, task *parseTask, depth int) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	existingTask, ok := d.tasks[task.normalizedFilePath]
+	if !ok {
+		return false
+	}
+	currentDepth := core.IfElse(task.increaseDepth, depth+1, depth)
+	if currentDepth < d.lowestDepth {
+		return false
+	}
+	if !(task.elideOnDepth && currentDepth > w.maxDepth) {
+		for _, taskByFileName := range d.tasks {
+			if !taskByFileName.loaded && !taskByFileName.loading {
+				return false
+			}
+		}
+	}
+	task.loadedTask = existingTask
+	if d.packageId.Name == "" && task.packageId.Name != "" {
+		d.packageId = task.packageId
+	}
+	return true
 }
 
 func (w *filesParser) getProcessedFiles(loader *fileLoader) processedFiles {
