@@ -27,11 +27,14 @@ func GetSymbolId(symbol *Symbol) SymbolId {
 }
 
 func getId(id *atomic.Uint64, counter *atomic.Uint64) uint64 {
+	probeIdGlobalCalls.Inc()
 	value := id.Load()
 	if value == 0 {
+		probeIdGlobalAssigns.Inc()
 		// Worst case, we burn a few ids if we have to CAS.
 		value = counter.Add(1)
 		if !id.CompareAndSwap(0, value) {
+			probeIdCASLosses.Inc()
 			value = id.Load()
 		}
 	}
@@ -72,7 +75,9 @@ type idBlock struct {
 }
 
 func (b *idBlock) assign(id *atomic.Uint64, counter *atomic.Uint64) uint64 {
+	probeIdBlockAssigns.Inc()
 	if b.next == b.end {
+		probeIdBlockReservations.Inc()
 		b.reserve(counter)
 	}
 	b.next++

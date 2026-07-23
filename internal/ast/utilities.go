@@ -13,6 +13,7 @@ import (
 
 func GetSymbolTable(data *SymbolTable) SymbolTable {
 	if *data == nil {
+		probeSymbolTableMakes.Inc()
 		*data = make(SymbolTable)
 	}
 	return *data

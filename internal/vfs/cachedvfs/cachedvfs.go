@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/microsoft/typescript-go/internal/collections"
+	"github.com/microsoft/typescript-go/internal/core"
 	"github.com/microsoft/typescript-go/internal/vfs"
 )
 
@@ -18,6 +19,19 @@ type FS struct {
 	realpathCache             collections.SyncMap[string, string]
 	statCache                 collections.SyncMap[string, vfs.FileInfo]
 }
+
+var (
+	probeDirExistsHits    = core.NewCounter("cachedvfs.DirectoryExists.hits")
+	probeDirExistsMisses  = core.NewCounter("cachedvfs.DirectoryExists.misses")
+	probeFileExistsHits   = core.NewCounter("cachedvfs.FileExists.hits")
+	probeFileExistsMisses = core.NewCounter("cachedvfs.FileExists.misses")
+	probeEntriesHits      = core.NewCounter("cachedvfs.GetAccessibleEntries.hits")
+	probeEntriesMisses    = core.NewCounter("cachedvfs.GetAccessibleEntries.misses")
+	probeStatHits         = core.NewCounter("cachedvfs.Stat.hits")
+	probeStatMisses       = core.NewCounter("cachedvfs.Stat.misses")
+	probeRealpathHits     = core.NewCounter("cachedvfs.Realpath.hits")
+	probeRealpathMisses   = core.NewCounter("cachedvfs.Realpath.misses")
+)
 
 var _ vfs.FS = (*FS)(nil)
 
@@ -48,9 +62,11 @@ func (fsys *FS) ClearCache() {
 func (fsys *FS) DirectoryExists(path string) bool {
 	if fsys.enabled.Load() {
 		if ret, ok := fsys.directoryExistsCache.Load(path); ok {
+			probeDirExistsHits.Inc()
 			return ret
 		}
 	}
+	probeDirExistsMisses.Inc()
 
 	ret := fsys.fs.DirectoryExists(path)
 
@@ -64,9 +80,11 @@ func (fsys *FS) DirectoryExists(path string) bool {
 func (fsys *FS) FileExists(path string) bool {
 	if fsys.enabled.Load() {
 		if ret, ok := fsys.fileExistsCache.Load(path); ok {
+			probeFileExistsHits.Inc()
 			return ret
 		}
 	}
+	probeFileExistsMisses.Inc()
 
 	ret := fsys.fs.FileExists(path)
 
@@ -80,9 +98,11 @@ func (fsys *FS) FileExists(path string) bool {
 func (fsys *FS) GetAccessibleEntries(path string) vfs.Entries {
 	if fsys.enabled.Load() {
 		if ret, ok := fsys.getAccessibleEntriesCache.Load(path); ok {
+			probeEntriesHits.Inc()
 			return ret
 		}
 	}
+	probeEntriesMisses.Inc()
 
 	ret := fsys.fs.GetAccessibleEntries(path)
 
@@ -100,9 +120,11 @@ func (fsys *FS) ReadFile(path string) (contents string, ok bool) {
 func (fsys *FS) Realpath(path string) string {
 	if fsys.enabled.Load() {
 		if ret, ok := fsys.realpathCache.Load(path); ok {
+			probeRealpathHits.Inc()
 			return ret
 		}
 	}
+	probeRealpathMisses.Inc()
 
 	ret := fsys.fs.Realpath(path)
 
@@ -124,9 +146,11 @@ func (fsys *FS) Chtimes(path string, aTime time.Time, mTime time.Time) error {
 func (fsys *FS) Stat(path string) vfs.FileInfo {
 	if fsys.enabled.Load() {
 		if ret, ok := fsys.statCache.Load(path); ok {
+			probeStatHits.Inc()
 			return ret
 		}
 	}
+	probeStatMisses.Inc()
 
 	ret := fsys.fs.Stat(path)
 

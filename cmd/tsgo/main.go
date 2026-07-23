@@ -11,7 +11,10 @@ import (
 )
 
 func main() {
-	os.Exit(runMain())
+	core.StartProbe()
+	status := runMain()
+	core.StopProbe()
+	os.Exit(status)
 }
 
 func runMain() int {

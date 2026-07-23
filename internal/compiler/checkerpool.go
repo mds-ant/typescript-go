@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"sync"
 
@@ -98,6 +99,8 @@ func (p *checkerPool) getCheckerNonExclusive() (*checker.Checker, func()) {
 func (p *checkerPool) createCheckers() {
 	p.createCheckersOnce.Do(func() {
 		checkerCount := len(p.checkers)
+		core.ProbeMark("beforeCreateCheckers")
+		phase := core.StartTaskProbe("createCheckers")
 		wg := core.NewWorkGroup(p.program.SingleThreaded())
 		for i := range checkerCount {
 			wg.Queue(func() {
@@ -105,11 +108,14 @@ func (p *checkerPool) createCheckers() {
 				if p.tracing != nil {
 					tracer = checker.NewTracer(p.tracing, i)
 				}
+				task := core.StartTaskProbe(fmt.Sprintf("newChecker%02d", i))
 				p.checkers[i], p.locks[i] = checker.NewChecker(p.program, tracer)
+				task.Stop("")
 			})
 		}
 
 		wg.RunAndWait()
+		phase.Stop("")
 
 		p.fileAssociations = make(map[*ast.SourceFile]*checker.Checker, len(p.program.files))
 		for i, file := range p.program.files {
@@ -149,19 +155,27 @@ func (p *checkerPool) forEachCheckerGroupDo(ctx context.Context, files []*ast.So
 	p.createCheckers()
 
 	checkerCount := len(p.checkers)
+	core.ProbeMark("beforeCheckGroup")
+	defer core.ProbeMark("afterCheckGroup")
+	phase := core.StartTaskProbe("checkGroup")
 	wg := core.NewWorkGroup(singleThreaded)
 	for checkerIdx := range checkerCount {
 		wg.Queue(func() {
 			p.locks[checkerIdx].Lock()
 			defer p.locks[checkerIdx].Unlock()
+			task := core.StartTaskProbe(fmt.Sprintf("check%02d", checkerIdx))
+			fileCount := 0
 			for i, file := range files {
 				if checker := p.checkers[checkerIdx]; checker == p.fileAssociations[file] {
+					fileCount++
 					cb(checker, i, file)
 				}
 			}
+			task.Stop("files=%d", fileCount)
 		})
 	}
 	wg.RunAndWait()
+	phase.Stop("")
 }
 
 func noop() {}
