@@ -1586,6 +1586,7 @@ func (node *Node) EagerJSDoc(file *SourceFile) []*Node {
 		}
 	}
 	if file.hasLazyJSDoc {
+		probeEagerJSDocLocked.Inc()
 		file.jsdocMu.RLock()
 		jsdocs := file.jsdocCache[node]
 		file.jsdocMu.RUnlock()
@@ -1598,8 +1599,10 @@ func (node *Node) EagerJSDoc(file *SourceFile) []*Node {
 
 func (node *CompositeBase) subtreeFactsWorker(self nodeData) SubtreeFacts {
 	// computeSubtreeFacts() is expected to be idempotent, so races will only impact time, not correctness.
+	probeSubtreeFactsCalls.Inc()
 	facts := SubtreeFacts(node.facts.Load())
 	if facts&SubtreeFactsComputed == 0 {
+		probeSubtreeFactsStores.Inc()
 		facts |= self.computeSubtreeFacts() | SubtreeFactsComputed
 		node.facts.Store(uint32(facts))
 	}
@@ -2431,6 +2434,7 @@ func getSourceFileDataCell[T any](file *SourceFile, key *SourceFileDataKey[T]) *
 	if key == nil || key.key == 0 {
 		panic("invalid SourceFileDataKey; use NewSourceFileDataKey")
 	}
+	probeFileDataCellCalls.Inc()
 
 	file.dataMu.Lock()
 	defer file.dataMu.Unlock()
@@ -2613,6 +2617,7 @@ func (node *SourceFile) resolveJSDoc(n *Node) []*Node {
 	if parseJSDocForNode == nil {
 		panic("resolveJSDoc called but parseJSDocForNode is not registered; ensure the parser package is imported")
 	}
+	probeResolveJSDocCalls.Inc()
 	// Fast path: check cache under read lock
 	node.jsdocMu.RLock()
 	if jsdocs, ok := node.jsdocCache[n]; ok {
@@ -2628,6 +2633,7 @@ func (node *SourceFile) resolveJSDoc(n *Node) []*Node {
 	if jsdocs, ok := node.jsdocCache[n]; ok {
 		return jsdocs
 	}
+	probeResolveJSDocParses.Inc()
 	jsdocs := parseJSDocForNode(node, n)
 	if node.jsdocCache == nil {
 		node.jsdocCache = make(map[*Node][]*Node)
@@ -2698,6 +2704,7 @@ func (f *NodeFactory) UpdateSourceFile(node *SourceFile, statements *StatementLi
 }
 
 func (node *SourceFile) ECMALineMap() []core.TextPos {
+	probeECMALineMapCalls.Inc()
 	node.ecmaLineMapMu.RLock()
 	lineMap := node.ecmaLineMap
 	node.ecmaLineMapMu.RUnlock()
@@ -2706,6 +2713,7 @@ func (node *SourceFile) ECMALineMap() []core.TextPos {
 		defer node.ecmaLineMapMu.Unlock()
 		lineMap = node.ecmaLineMap
 		if lineMap == nil {
+			probeECMALineMapMakes.Inc()
 			lineMap = core.ComputeECMALineStarts(node.Text())
 			node.ecmaLineMap = lineMap
 		}
@@ -2716,6 +2724,7 @@ func (node *SourceFile) ECMALineMap() []core.TextPos {
 // GetNameTable returns a map of all names in the file to their positions.
 // If the name appears more than once, the value is -1.
 func (file *SourceFile) GetNameTable() map[string]int {
+	probeGetNameTableOnce.Inc()
 	file.nameTableOnce.Do(func() {
 		nameTable := make(map[string]int, file.IdentifierCount)
 

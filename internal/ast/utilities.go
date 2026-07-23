@@ -20,11 +20,14 @@ var (
 )
 
 func GetNodeId(node *Node) NodeId {
+	probeNodeIdCalls.Inc()
 	id := node.id.Load()
 	if id == 0 {
+		probeNodeIdAssigns.Inc()
 		// Worst case, we burn a few ids if we have to CAS.
 		id = nextNodeId.Add(1)
 		if !node.id.CompareAndSwap(0, id) {
+			probeIdCASLosses.Inc()
 			id = node.id.Load()
 		}
 	}
@@ -32,11 +35,14 @@ func GetNodeId(node *Node) NodeId {
 }
 
 func GetSymbolId(symbol *Symbol) SymbolId {
+	probeSymbolIdCalls.Inc()
 	id := symbol.id.Load()
 	if id == 0 {
+		probeSymbolIdAssigns.Inc()
 		// Worst case, we burn a few ids if we have to CAS.
 		id = nextSymbolId.Add(1)
 		if !symbol.id.CompareAndSwap(0, id) {
+			probeIdCASLosses.Inc()
 			id = symbol.id.Load()
 		}
 	}
@@ -45,6 +51,7 @@ func GetSymbolId(symbol *Symbol) SymbolId {
 
 func GetSymbolTable(data *SymbolTable) SymbolTable {
 	if *data == nil {
+		probeSymbolTableMakes.Inc()
 		*data = make(SymbolTable)
 	}
 	return *data

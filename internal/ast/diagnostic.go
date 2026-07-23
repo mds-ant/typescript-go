@@ -170,6 +170,7 @@ type DiagnosticsCollection struct {
 }
 
 func (c *DiagnosticsCollection) Add(diagnostic *Diagnostic) {
+	probeDiagAdds.Inc()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -189,6 +190,7 @@ func (c *DiagnosticsCollection) Add(diagnostic *Diagnostic) {
 }
 
 func (c *DiagnosticsCollection) Lookup(diagnostic *Diagnostic) *Diagnostic {
+	probeDiagLookups.Inc()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 

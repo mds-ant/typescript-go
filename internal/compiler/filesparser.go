@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"math"
+	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -228,6 +229,14 @@ func putParseTaskData(td *parseTaskData) {
 	parseTaskDataPool.Put(td)
 }
 
+var probeDedupTasks = os.Getenv("TSGO_PROBE_DEDUP") != ""
+
+var (
+	probeParseTasksQueued        = core.NewCounter("compiler.filesParser.tasksQueued")
+	probeParseTasksAlreadyLoaded = core.NewCounter("compiler.filesParser.tasksForKnownPath")
+	probeParseTaskLoads          = core.NewCounter("compiler.filesParser.taskLoads")
+)
+
 type parseTaskData struct {
 	// map of tasks by file casing
 	tasks           map[string]*parseTask
@@ -251,6 +260,13 @@ func (w *filesParser) start(loader *fileLoader, tasks []*parseTask, depth int) {
 			putParseTaskData(candidate)
 		}
 
+		probeParseTasksQueued.Inc()
+		if loaded {
+			probeParseTasksAlreadyLoaded.Inc()
+			if probeDedupTasks {
+				continue
+			}
+		}
 		w.wg.Queue(func() {
 			data.mu.Lock()
 			defer data.mu.Unlock()
@@ -287,6 +303,7 @@ func (w *filesParser) start(loader *fileLoader, tasks []*parseTask, depth int) {
 			for _, taskByFileName := range data.tasks {
 				loadSubTasks := startSubtasks
 				if !taskByFileName.loaded {
+					probeParseTaskLoads.Inc()
 					taskByFileName.load(loader)
 					if taskByFileName.redirectedParseTask != nil {
 						// Always load redirected task

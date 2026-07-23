@@ -276,7 +276,9 @@ func NewProgram(opts ProgramOptions) *Program {
 	if p.opts.Tracing != nil {
 		defer p.opts.Tracing.Push(tracing.PhaseProgram, "createProgram", map[string]any{"configFilePath": opts.Config.CompilerOptions().ConfigFilePath}, true)()
 	}
+	core.ProbeMark("beforeLoad")
 	p.processedFiles = processAllProgramFiles(p.opts, p.SingleThreaded())
+	core.ProbeMark("afterLoad")
 	p.initCheckerPool()
 	p.verifyCompilerOptions()
 	return p
@@ -448,6 +450,8 @@ func (p *Program) SingleThreaded() bool {
 }
 
 func (p *Program) BindSourceFiles() {
+	core.ProbeMark("beforeBind")
+	defer core.ProbeMark("afterBind")
 	wg := core.NewWorkGroup(p.SingleThreaded())
 	for _, file := range p.files {
 		if !file.IsBound() {
