@@ -1008,6 +1008,7 @@ type InterfaceType struct {
 	resolvedBaseConstructorType *Type
 	resolvedBaseTypes           []*Type
 	declaredMembers             ast.SymbolTable // Declared members
+	declaredProperties          []*ast.Symbol   // Declared named members in property order
 	declaredCallSignatures      []*Signature    // Declared call signatures
 	declaredConstructSignatures []*Signature    // Declared construct signatures
 	declaredIndexInfos          []*IndexInfo    // Declared index signatures

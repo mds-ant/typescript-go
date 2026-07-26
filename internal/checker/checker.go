@@ -19104,6 +19104,7 @@ func (c *Checker) resolveTypeReferenceMembers(t *Type) {
 func (c *Checker) resolveObjectTypeMembers(t *Type, source *Type, typeParameters []*Type, typeArguments []*Type) {
 	var mapper *TypeMapper
 	var members ast.SymbolTable
+	var properties []*ast.Symbol
 	var callSignatures []*Signature
 	var constructSignatures []*Signature
 	var indexInfos []*IndexInfo
@@ -19111,6 +19112,7 @@ func (c *Checker) resolveObjectTypeMembers(t *Type, source *Type, typeParameters
 	resolved := c.resolveDeclaredMembers(source)
 	if slices.Equal(typeParameters, typeArguments) {
 		members = resolved.declaredMembers
+		properties = resolved.declaredProperties
 		callSignatures = resolved.declaredCallSignatures
 		constructSignatures = resolved.declaredConstructSignatures
 		indexInfos = resolved.declaredIndexInfos
@@ -19118,6 +19120,13 @@ func (c *Checker) resolveObjectTypeMembers(t *Type, source *Type, typeParameters
 		instantiated = true
 		mapper = newTypeMapper(typeParameters, typeArguments)
 		members = c.instantiateSymbolTable(resolved.declaredMembers, mapper)
+		// The instantiated members have the same property order as the declared members.
+		if len(resolved.declaredProperties) != 0 {
+			properties = make([]*ast.Symbol, len(resolved.declaredProperties))
+			for i, prop := range resolved.declaredProperties {
+				properties[i] = members[prop.Name]
+			}
+		}
 		callSignatures = c.instantiateSignatures(resolved.declaredCallSignatures, mapper)
 		constructSignatures = c.instantiateSignatures(resolved.declaredConstructSignatures, mapper)
 		indexInfos = c.instantiateIndexInfos(resolved.declaredIndexInfos, mapper)
@@ -19127,7 +19136,7 @@ func (c *Checker) resolveObjectTypeMembers(t *Type, source *Type, typeParameters
 		if !instantiated {
 			members = maps.Clone(members)
 		}
-		c.setStructuredTypeMembers(t, members, callSignatures, constructSignatures, indexInfos)
+		c.setStructuredTypeMembersEx(t, members, properties, callSignatures, constructSignatures, indexInfos)
 		thisArgument := core.LastOrNil(typeArguments)
 		t.objectFlags |= ObjectFlagsUnresolvedMembers
 		for _, baseType := range baseTypes {
@@ -19149,8 +19158,11 @@ func (c *Checker) resolveObjectTypeMembers(t *Type, source *Type, typeParameters
 			}))
 		}
 		t.objectFlags &^= ObjectFlagsUnresolvedMembers
+		// The inherited members are interleaved into the property order, so recompute it.
+		c.setStructuredTypeMembers(t, members, callSignatures, constructSignatures, indexInfos)
+		return
 	}
-	c.setStructuredTypeMembers(t, members, callSignatures, constructSignatures, indexInfos)
+	c.setStructuredTypeMembersEx(t, members, properties, callSignatures, constructSignatures, indexInfos)
 }
 
 func findIndexInfo(indexInfos []*IndexInfo, keyType *Type) *IndexInfo {
@@ -19613,6 +19625,7 @@ func (c *Checker) resolveDeclaredMembers(t *Type) *InterfaceType {
 		members := c.getMembersOfSymbol(t.symbol)
 		d.declaredMembersResolved = true
 		d.declaredMembers = members
+		d.declaredProperties = c.getNamedMembers(members, t.symbol)
 		d.declaredCallSignatures = c.getSignaturesOfSymbol(d.declaredMembers[ast.InternalSymbolNameCall])
 		d.declaredConstructSignatures = c.getSignaturesOfSymbol(d.declaredMembers[ast.InternalSymbolNameNew])
 		d.declaredIndexInfos = c.getIndexInfosOfSymbol(t.symbol)
@@ -24818,6 +24831,7 @@ func (c *Checker) createTupleTargetType(elementInfos []TupleElementInfo, readonl
 	d.resolvedTypeArguments = d.TypeParameters()
 	d.declaredMembersResolved = true
 	d.declaredMembers = members
+	d.declaredProperties = c.getNamedMembers(members, t.symbol)
 	d.elementInfos = elementInfos
 	d.minLength = minLength
 	d.fixedLength = fixedLength
@@ -25142,10 +25156,19 @@ func (c *Checker) cloneTypeReference(source *Type) *Type {
 }
 
 func (c *Checker) setStructuredTypeMembers(t *Type, members ast.SymbolTable, callSignatures []*Signature, constructSignatures []*Signature, indexInfos []*IndexInfo) {
+	c.setStructuredTypeMembersEx(t, members, nil /*properties*/, callSignatures, constructSignatures, indexInfos)
+}
+
+// The properties are the named members in property order. When nil, they are computed by sorting the named
+// members, which must happen after the type is marked resolved as it can loop back into member resolution.
+func (c *Checker) setStructuredTypeMembersEx(t *Type, members ast.SymbolTable, properties []*ast.Symbol, callSignatures []*Signature, constructSignatures []*Signature, indexInfos []*IndexInfo) {
 	t.objectFlags |= ObjectFlagsMembersResolved
 	data := t.AsStructuredType()
 	data.members = members
-	data.properties = c.getNamedMembers(members, t.symbol)
+	if properties == nil {
+		properties = c.getNamedMembers(members, t.symbol)
+	}
+	data.properties = properties
 	if len(callSignatures) != 0 {
 		if len(constructSignatures) != 0 {
 			data.signatures = core.Concatenate(callSignatures, constructSignatures)
