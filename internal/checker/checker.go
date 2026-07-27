@@ -2,6 +2,7 @@ package checker
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"iter"
 	"maps"
@@ -17357,30 +17358,6 @@ func (c *Checker) isThislessInterface(symbol *ast.Symbol) bool {
 	return true
 }
 
-func hashWrite32[T ~int32 | ~uint32](h *xxh3.Hasher, value T) {
-	v := uint32(value)
-	_, _ = h.Write([]byte{
-		byte(v),
-		byte(v >> 8),
-		byte(v >> 16),
-		byte(v >> 24),
-	})
-}
-
-func hashWrite64[T ~int | ~uint | ~int64 | ~uint64](h *xxh3.Hasher, value T) {
-	v := uint64(value)
-	_, _ = h.Write([]byte{
-		byte(v),
-		byte(v >> 8),
-		byte(v >> 16),
-		byte(v >> 24),
-		byte(v >> 32),
-		byte(v >> 40),
-		byte(v >> 48),
-		byte(v >> 56),
-	})
-}
-
 type CacheHashKey xxh3.Uint128
 
 func (k CacheHashKey) IsZero() bool {
@@ -17388,31 +17365,68 @@ func (k CacheHashKey) IsZero() bool {
 }
 
 type keyBuilder struct {
-	h xxh3.Hasher
+	used     int
+	overflow []byte // spilled prefix when a key outgrows inline
+	inline   [192]byte
 }
 
 func (b *keyBuilder) hash() CacheHashKey {
-	return CacheHashKey(b.h.Sum128())
+	if b.overflow == nil {
+		return CacheHashKey(xxh3.Hash128(b.inline[:b.used]))
+	}
+	return CacheHashKey(xxh3.Hash128(append(b.overflow, b.inline[:b.used]...)))
+}
+
+func (b *keyBuilder) spill() {
+	b.overflow = append(b.overflow, b.inline[:b.used]...)
+	b.used = 0
 }
 
 func (b *keyBuilder) writeByte(c byte) {
-	_, _ = b.h.Write([]byte{c})
+	if b.used == len(b.inline) {
+		b.spill()
+	}
+	b.inline[b.used] = c
+	b.used++
 }
 
 func (b *keyBuilder) writeString(s string) {
-	_, _ = b.h.WriteString(s)
+	if b.used+len(s) > len(b.inline) {
+		b.spill()
+		if len(s) > len(b.inline) {
+			b.overflow = append(b.overflow, s...)
+			return
+		}
+	}
+	b.used += copy(b.inline[b.used:], s)
+}
+
+func (b *keyBuilder) writeUint32(v uint32) {
+	if b.used+4 > len(b.inline) {
+		b.spill()
+	}
+	binary.LittleEndian.PutUint32(b.inline[b.used:], v)
+	b.used += 4
+}
+
+func (b *keyBuilder) writeUint64(v uint64) {
+	if b.used+8 > len(b.inline) {
+		b.spill()
+	}
+	binary.LittleEndian.PutUint64(b.inline[b.used:], v)
+	b.used += 8
 }
 
 func (b *keyBuilder) writeInt(value int) {
-	hashWrite64(&b.h, value)
+	b.writeUint64(uint64(value))
 }
 
 func (b *keyBuilder) writeSymbol(s *ast.Symbol) {
-	hashWrite64(&b.h, ast.GetSymbolId(s))
+	b.writeUint64(uint64(ast.GetSymbolId(s)))
 }
 
 func (b *keyBuilder) writeType(t *Type) {
-	hashWrite32(&b.h, t.id)
+	b.writeUint32(uint32(t.id))
 }
 
 func (b *keyBuilder) writeTypes(types []*Type) {
@@ -17468,7 +17482,7 @@ func (b *keyBuilder) writeGenericTypeReferences(source *Type, target *Type, igno
 }
 
 func (b *keyBuilder) writeNodeId(id ast.NodeId) {
-	hashWrite64(&b.h, id)
+	b.writeUint64(uint64(id))
 }
 
 func (b *keyBuilder) writeNode(node *ast.Node) {
@@ -17565,7 +17579,7 @@ func getIndexedAccessKey(objectType *Type, indexType *Type, accessFlags AccessFl
 	var b keyBuilder
 	b.writeType(objectType)
 	b.writeType(indexType)
-	hashWrite32(&b.h, accessFlags)
+	b.writeUint32(uint32(accessFlags))
 	b.writeAlias(alias)
 	return b.hash()
 }
@@ -17608,7 +17622,7 @@ func getRelationKey(source *Type, target *Type, intersectionState IntersectionSt
 		b.writeType(source)
 		b.writeType(target)
 	}
-	hashWrite32(&b.h, intersectionState)
+	b.writeUint32(uint32(intersectionState))
 	return b.hash(), constrained
 }
 
