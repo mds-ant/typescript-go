@@ -17608,13 +17608,22 @@ func getConditionalTypeKey(typeArguments []*Type, alias *TypeAlias, forConstrain
 	return b.hash()
 }
 
+// relationKeySimpleTag marks a relation cache key that packs the two type ids and the intersection state
+// directly instead of hashing them. Hashed relation keys have this bit cleared, so the two never mix.
+const relationKeySimpleTag = uint64(1) << 63
+
 func getRelationKey(source *Type, target *Type, intersectionState IntersectionState, isIdentity bool, ignoreConstraints bool) (CacheHashKey, bool) {
 	if isIdentity && source.id > target.id {
 		source, target = target, source
 	}
+	bothGenericReferences := isTypeReferenceWithGenericArguments(source) && isTypeReferenceWithGenericArguments(target)
+	if !bothGenericReferences && source.id|target.id < 1<<31 {
+		packed := uint64(source.id) | uint64(target.id)<<31 | uint64(intersectionState)<<62
+		return CacheHashKey{Hi: relationKeySimpleTag, Lo: packed}, false
+	}
 	var b keyBuilder
 	var constrained bool
-	if isTypeReferenceWithGenericArguments(source) && isTypeReferenceWithGenericArguments(target) {
+	if bothGenericReferences {
 		b.writeByte('g')
 		constrained = b.writeGenericTypeReferences(source, target, ignoreConstraints)
 	} else {
@@ -17623,7 +17632,9 @@ func getRelationKey(source *Type, target *Type, intersectionState IntersectionSt
 		b.writeType(target)
 	}
 	b.writeUint32(uint32(intersectionState))
-	return b.hash(), constrained
+	key := b.hash()
+	key.Hi &^= relationKeySimpleTag
+	return key, constrained
 }
 
 func getNodeListKey(nodes []*ast.Node) CacheHashKey {

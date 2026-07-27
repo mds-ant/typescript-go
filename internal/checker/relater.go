@@ -96,15 +96,28 @@ func asRecursionId[T *ast.Node | *ast.Symbol | *Type](value T) RecursionId {
 	return RecursionId{value: value}
 }
 
+// Relation caches type relationship results keyed by getRelationKey. Packed keys hold the two
+// type ids in their low word and live in simpleResults; hashed keys live in results.
 type Relation struct {
-	results map[CacheHashKey]RelationComparisonResult
+	results       map[CacheHashKey]RelationComparisonResult
+	simpleResults map[uint64]RelationComparisonResult
 }
 
 func (r *Relation) get(key CacheHashKey) RelationComparisonResult {
+	if key.Hi == relationKeySimpleTag {
+		return r.simpleResults[key.Lo]
+	}
 	return r.results[key]
 }
 
 func (r *Relation) set(key CacheHashKey, result RelationComparisonResult) {
+	if key.Hi == relationKeySimpleTag {
+		if r.simpleResults == nil {
+			r.simpleResults = make(map[uint64]RelationComparisonResult)
+		}
+		r.simpleResults[key.Lo] = result
+		return
+	}
 	if r.results == nil {
 		r.results = make(map[CacheHashKey]RelationComparisonResult)
 	}
@@ -112,7 +125,7 @@ func (r *Relation) set(key CacheHashKey, result RelationComparisonResult) {
 }
 
 func (r *Relation) size() int {
-	return len(r.results)
+	return len(r.results) + len(r.simpleResults)
 }
 
 func (c *Checker) isTypeIdenticalTo(source *Type, target *Type) bool {

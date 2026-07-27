@@ -33,8 +33,6 @@ func TestCacheKeyEncoding(t *testing.T) {
 
 	few := types(3)
 	many := types(inlineSize/4 + 1)
-	source, target := &Type{id: 5}, &Type{id: 7}
-	relationKey, _ := getRelationKey(source, target, IntersectionStateSource, false /*isIdentity*/, false /*ignoreConstraints*/)
 	nearFull := types((inlineSize - 8 - 1) / 4)
 	fitting := []string{strings.Repeat("a", inlineSize*3/4), strings.Repeat("b", inlineSize/2)}
 	overflowing := strings.Repeat("x", inlineSize+1)
@@ -84,11 +82,6 @@ func TestCacheKeyEncoding(t *testing.T) {
 			key:   getTemplateTypeKey([]string{overflowing}, few),
 			bytes: slices.Concat(typeList(few), []byte("|"), uint64LE(uint64(len(overflowing))), []byte("|"), []byte(overflowing)),
 		},
-		{
-			name:  "relation between plain types",
-			key:   relationKey,
-			bytes: slices.Concat([]byte("s"), uint32LE(uint32(source.id)), uint32LE(uint32(target.id)), uint32LE(uint32(IntersectionStateSource))),
-		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -96,4 +89,12 @@ func TestCacheKeyEncoding(t *testing.T) {
 			assert.Equal(t, test.key, CacheHashKey(xxh3.Hash128(test.bytes)))
 		})
 	}
+}
+
+func TestRelationKeyBetweenPlainTypesIsPacked(t *testing.T) {
+	t.Parallel()
+	source, target := &Type{id: 5}, &Type{id: 7}
+	key, constrained := getRelationKey(source, target, IntersectionStateSource, false /*isIdentity*/, false /*ignoreConstraints*/)
+	assert.Assert(t, !constrained)
+	assert.Equal(t, key, CacheHashKey{Hi: relationKeySimpleTag, Lo: uint64(source.id) | uint64(target.id)<<31 | uint64(IntersectionStateSource)<<62})
 }
