@@ -2519,7 +2519,6 @@ type SourceFile struct {
 	BindSuggestionDiagnostics []*Diagnostic
 	EndFlowNode               *FlowNode
 	SymbolCount               int
-	ClassifiableNames         collections.Set[string]
 	PatternAmbientModules     []*PatternAmbientModule
 	GlobalExports             SymbolTable
 
