@@ -2487,7 +2487,9 @@ type SourceFile struct {
 	IsDeclarationFile           bool
 	ContainsNonASCII            bool
 	UsesUriStyleNodeCoreModules core.Tristate
-	Identifiers                 map[string]string
+	identifiersOnce             sync.Once
+	identifiers                 collections.Set[string]
+	identifierSource            *SourceFile // parsed file whose identifiers are shared with this derived file
 	IdentifierCount             int
 	imports                     []*LiteralLikeNode // []LiteralLikeNode
 	ModuleAugmentations         []*ModuleName      // []ModuleName
@@ -2663,7 +2665,7 @@ func (node *SourceFile) copyFrom(other *SourceFile) {
 	node.IsDeclarationFile = other.IsDeclarationFile
 	node.ContainsNonASCII = other.ContainsNonASCII
 	node.UsesUriStyleNodeCoreModules = other.UsesUriStyleNodeCoreModules
-	node.Identifiers = other.Identifiers
+	node.identifierSource = core.Coalesce(other.identifierSource, other)
 	node.imports = other.imports
 	node.ModuleAugmentations = other.ModuleAugmentations
 	node.AmbientModuleNames = other.AmbientModuleNames

@@ -652,8 +652,7 @@ func IsFileLevelUniqueName(sourceFile *ast.SourceFile, name string, hasGlobalNam
 	if hasGlobalName != nil && hasGlobalName(name) {
 		return false
 	}
-	_, ok := sourceFile.Identifiers[name]
-	return !ok
+	return !sourceFile.Identifiers().Has(name)
 }
 
 func hasLeadingHash(text string) bool {
