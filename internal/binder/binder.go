@@ -145,11 +145,11 @@ func (b *Binder) newSymbol(flags ast.SymbolFlags, name string) *ast.Symbol {
  * @param includes - The SymbolFlags that node has in addition to its declaration type (eg: export, ambient, etc.)
  * @param excludes - The flags which node cannot be declared alongside in a symbol table. Used to report forbidden declarations.
  */
-func (b *Binder) declareSymbol(symbolTable ast.SymbolTable, parent *ast.Symbol, node *ast.Node, includes ast.SymbolFlags, excludes ast.SymbolFlags) *ast.Symbol {
+func (b *Binder) declareSymbol(symbolTable *ast.SymbolTable, parent *ast.Symbol, node *ast.Node, includes ast.SymbolFlags, excludes ast.SymbolFlags) *ast.Symbol {
 	return b.declareSymbolEx(symbolTable, parent, node, includes, excludes, false /*isReplaceableByMethod*/, false /*isComputedName*/)
 }
 
-func (b *Binder) declareSymbolEx(symbolTable ast.SymbolTable, parent *ast.Symbol, node *ast.Node, includes ast.SymbolFlags, excludes ast.SymbolFlags, isReplaceableByMethod bool, isComputedName bool) *ast.Symbol {
+func (b *Binder) declareSymbolEx(symbolTable *ast.SymbolTable, parent *ast.Symbol, node *ast.Node, includes ast.SymbolFlags, excludes ast.SymbolFlags, isReplaceableByMethod bool, isComputedName bool) *ast.Symbol {
 	debug.Assert(isComputedName || !ast.HasDynamicName(node))
 	isDefaultExport := ast.HasSyntacticModifier(node, ast.ModifierFlagsDefault) || ast.IsExportSpecifier(node) && ast.ModuleExportNameIsDefault(node.AsExportSpecifier().Name())
 	// The exported symbol for an export default function/class node is always named "default"
@@ -189,10 +189,10 @@ func (b *Binder) declareSymbolEx(symbolTable ast.SymbolTable, parent *ast.Symbol
 		// Otherwise, we'll be merging into a compatible existing symbol (for example when
 		// you have multiple 'vars' with the same name in the same container).  In this case
 		// just add this node into the declarations list of the symbol.
-		symbol = symbolTable[name]
+		symbol = symbolTable.Get(name)
 		if symbol == nil {
 			symbol = b.newSymbol(ast.SymbolFlagsNone, name)
-			symbolTable[name] = symbol
+			symbolTable.Set(name, symbol)
 			if isReplaceableByMethod {
 				symbol.Flags |= ast.SymbolFlagsReplaceableByMethod
 			}
@@ -204,7 +204,7 @@ func (b *Binder) declareSymbolEx(symbolTable ast.SymbolTable, parent *ast.Symbol
 				// Javascript constructor-declared symbols can be discarded in favor of
 				// prototype symbols like methods.
 				symbol = b.newSymbol(ast.SymbolFlagsNone, name)
-				symbolTable[name] = symbol
+				symbolTable.Set(name, symbol)
 			} else if !(includes&ast.SymbolFlagsVariable != 0 && symbol.Flags&ast.SymbolFlagsAssignment != 0 ||
 				includes&ast.SymbolFlagsAssignment != 0 && symbol.Flags&ast.SymbolFlagsVariable != 0) {
 				// Assignment declarations are allowed to merge with variables, no matter what other flags they have.
@@ -960,11 +960,11 @@ func (b *Binder) bindClassLikeDeclaration(node *ast.Node) {
 	// module might have an exported variable called 'prototype'.  We can't allow that as
 	// that would clash with the built-in 'prototype' for the class.
 	prototypeSymbol := b.newSymbol(ast.SymbolFlagsProperty|ast.SymbolFlagsPrototype, "prototype")
-	symbolExport := ast.GetExports(symbol)[prototypeSymbol.Name]
+	symbolExport := ast.GetExports(symbol).Get(prototypeSymbol.Name)
 	if symbolExport != nil {
 		b.errorOnNode(symbolExport.Declarations[0], diagnostics.Duplicate_identifier_0, ast.SymbolName(prototypeSymbol))
 	}
-	ast.GetExports(symbol)[prototypeSymbol.Name] = prototypeSymbol
+	ast.GetExports(symbol).Set(prototypeSymbol.Name, prototypeSymbol)
 	prototypeSymbol.Parent = symbol
 }
 
@@ -993,16 +993,16 @@ func (b *Binder) bindFunctionOrConstructorType(node *ast.Node) {
 	b.addDeclarationToSymbol(symbol, node, ast.SymbolFlagsSignature)
 	typeLiteralSymbol := b.newSymbol(ast.SymbolFlagsTypeLiteral, ast.InternalSymbolNameType)
 	b.addDeclarationToSymbol(typeLiteralSymbol, node, ast.SymbolFlagsTypeLiteral)
-	typeLiteralSymbol.Members = make(ast.SymbolTable)
-	typeLiteralSymbol.Members[symbol.Name] = symbol
+	typeLiteralSymbol.Members = ast.NewSymbolTable()
+	typeLiteralSymbol.Members.Set(symbol.Name, symbol)
 }
 
 func (b *Binder) addLateBoundAssignmentDeclarationToSymbol(node *ast.Node, symbol *ast.Symbol) {
 	exports := ast.GetExports(symbol)
-	assignmentSymbol := exports[ast.InternalSymbolNameAssignmentDeclaration]
+	assignmentSymbol := exports.Get(ast.InternalSymbolNameAssignmentDeclaration)
 	if assignmentSymbol == nil {
 		assignmentSymbol = b.newSymbol(ast.SymbolFlagsNone, ast.InternalSymbolNameAssignmentDeclaration)
-		exports[ast.InternalSymbolNameAssignmentDeclaration] = assignmentSymbol
+		exports.Set(ast.InternalSymbolNameAssignmentDeclaration, assignmentSymbol)
 	}
 	assignmentSymbol.Declarations = append(assignmentSymbol.Declarations, node)
 }
@@ -1037,10 +1037,10 @@ func (b *Binder) bindDeferredExpandoAssignments() {
 // symbol as a namespace module.
 func (b *Binder) bindCommonJSTypeExports(moduleSymbol *ast.Symbol) {
 	moduleExports := moduleSymbol.Exports
-	if exportEquals := moduleExports[ast.InternalSymbolNameExportEquals]; exportEquals != nil {
-		for _, symbol := range moduleExports {
+	if exportEquals := moduleExports.Get(ast.InternalSymbolNameExportEquals); exportEquals != nil {
+		for _, symbol := range moduleExports.All() {
 			if symbol.Name != ast.InternalSymbolNameExportEquals && symbol.Flags&(ast.SymbolFlagsType|ast.SymbolFlagsNamespace) != 0 {
-				ast.GetExports(exportEquals)[symbol.Name] = symbol
+				ast.GetExports(exportEquals).Set(symbol.Name, symbol)
 				exportEquals.Flags |= ast.SymbolFlagsNamespaceModule
 			}
 		}
@@ -1060,7 +1060,7 @@ func (b *Binder) bindDeferredExpandoAssignment(node *ast.Node) {
 		} else {
 			// We declare expandos only when there are no non-expando declarations for that name.
 			exports := ast.GetExports(symbol)
-			if existing := exports[b.getDeclarationName(node)]; existing == nil || existing.Flags&ast.SymbolFlagsAssignment != 0 {
+			if existing := exports.Get(b.getDeclarationName(node)); existing == nil || existing.Flags&ast.SymbolFlagsAssignment != 0 {
 				b.declareSymbol(exports, symbol, node, ast.SymbolFlagsProperty|ast.SymbolFlagsAssignment, ast.SymbolFlagsPropertyExcludes)
 			}
 		}
@@ -1134,7 +1134,7 @@ func (b *Binder) bindThisPropertyAssignment(node *ast.Node) {
 	}
 }
 
-func (b *Binder) getThisClassAndSymbolTable() (classSymbol *ast.Symbol, symbolTable ast.SymbolTable) {
+func (b *Binder) getThisClassAndSymbolTable() (classSymbol *ast.Symbol, symbolTable *ast.SymbolTable) {
 	if b.thisContainer == nil {
 		return nil, nil
 	}
@@ -1270,14 +1270,14 @@ func (b *Binder) lookupEntity(node *ast.Node, container *ast.Node) *ast.Symbol {
 	if node.Expression().Kind == ast.KindThisKeyword {
 		if _, symbolTable := b.getThisClassAndSymbolTable(); symbolTable != nil {
 			if name := ast.GetElementOrPropertyAccessName(node); name != nil {
-				return symbolTable[name.Text()]
+				return symbolTable.Get(name.Text())
 			}
 		}
 		return nil
 	}
 	if symbol := getInitializerSymbol(b.lookupEntity(node.Expression(), container)); symbol != nil && symbol.Exports != nil {
 		if name := ast.GetElementOrPropertyAccessName(node); name != nil {
-			return symbol.Exports[name.Text()]
+			return symbol.Exports.Get(name.Text())
 		}
 	}
 	return nil
@@ -1285,12 +1285,12 @@ func (b *Binder) lookupEntity(node *ast.Node, container *ast.Node) *ast.Symbol {
 
 func (b *Binder) lookupName(name string, container *ast.Node) *ast.Symbol {
 	if localsContainer := container.LocalsContainerData(); localsContainer != nil {
-		if local := localsContainer.Locals[name]; local != nil {
+		if local := localsContainer.Locals.Get(name); local != nil {
 			return core.OrElse(local.ExportSymbol, local)
 		}
 	}
 	if declaration := container.DeclarationData(); declaration != nil && declaration.Symbol != nil {
-		return declaration.Symbol.Exports[name]
+		return declaration.Symbol.Exports.Get(name)
 	}
 	return nil
 }
@@ -1620,7 +1620,7 @@ func (b *Binder) bindContainer(node *ast.Node, containerFlags ContainerFlags) {
 
 func (b *Binder) declareCommonJSVariable(name string) {
 	locals := ast.GetLocals(b.file.AsNode())
-	if locals[name] == nil {
+	if locals.Get(name) == nil {
 		symbol := b.newSymbol(ast.SymbolFlagsFunctionScopedVariable|ast.SymbolFlagsModuleExports, name)
 		symbol.Declarations = b.newSingleDeclaration(b.file.AsNode())
 		symbol.ValueDeclaration = symbol.Declarations[0]
@@ -1629,10 +1629,10 @@ func (b *Binder) declareCommonJSVariable(name string) {
 			exportsProperty.Declarations = symbol.Declarations
 			exportsProperty.ValueDeclaration = symbol.ValueDeclaration
 			exportsProperty.Parent = symbol
-			symbol.Members = make(ast.SymbolTable, 1)
-			symbol.Members["exports"] = exportsProperty
+			symbol.Members = ast.NewSymbolTableWithCapacity(1)
+			symbol.Members.Set("exports", exportsProperty)
 		}
-		locals[name] = symbol
+		locals.Set(name, symbol)
 	}
 }
 

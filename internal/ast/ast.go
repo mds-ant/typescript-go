@@ -253,7 +253,7 @@ func (n *Node) LocalSymbol() *Symbol {
 	return nil
 }
 
-func (n *Node) Locals() SymbolTable {
+func (n *Node) Locals() *SymbolTable {
 	data := n.LocalsContainerData()
 	if data != nil {
 		return data.Locals
@@ -2514,7 +2514,7 @@ type SourceFile struct {
 	EndFlowNode               *FlowNode
 	SymbolCount               int
 	PatternAmbientModules     []*PatternAmbientModule
-	GlobalExports             SymbolTable
+	GlobalExports             *SymbolTable
 
 	// Fields set by ECMALineMap
 

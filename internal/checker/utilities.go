@@ -36,13 +36,13 @@ func NewDiagnosticChainForNode(chain *ast.Diagnostic, node *ast.Node, message *d
 	return NewDiagnosticForNode(node, message, args...)
 }
 
-func findInMap[K comparable, V any](m map[K]V, predicate func(V) bool) V {
-	for _, value := range m {
-		if predicate(value) {
-			return value
+func findSymbolInTable(symbols *ast.SymbolTable, predicate func(*ast.Symbol) bool) *ast.Symbol {
+	for symbol := range symbols.Values() {
+		if predicate(symbol) {
+			return symbol
 		}
 	}
-	return *new(V)
+	return nil
 }
 
 func tokenIsIdentifierOrKeyword(token ast.Kind) bool {
@@ -255,7 +255,7 @@ func isSyntacticDefault(node *ast.Node) bool {
 }
 
 func hasExportAssignmentSymbol(moduleSymbol *ast.Symbol) bool {
-	return moduleSymbol.Exports[ast.InternalSymbolNameExportEquals] != nil
+	return moduleSymbol.Exports.Get(ast.InternalSymbolNameExportEquals) != nil
 }
 
 func isTypeAlias(node *ast.Node) bool {
@@ -348,13 +348,13 @@ func isTypeAssertion(node *ast.Node) bool {
 	return ast.IsAssertionExpression(ast.SkipParentheses(node))
 }
 
-func createSymbolTable(symbols []*ast.Symbol) ast.SymbolTable {
+func createSymbolTable(symbols []*ast.Symbol) *ast.SymbolTable {
 	if len(symbols) == 0 {
 		return nil
 	}
-	result := make(ast.SymbolTable)
+	result := ast.NewSymbolTable()
 	for _, symbol := range symbols {
-		result[symbol.Name] = symbol
+		result.Set(symbol.Name, symbol)
 	}
 	return result
 }
@@ -1150,8 +1150,8 @@ func isInNameOfExpressionWithTypeArguments(node *ast.Node) bool {
 	return node.Parent.Kind == ast.KindExpressionWithTypeArguments
 }
 
-func getIndexSymbolFromSymbolTable(symbolTable ast.SymbolTable) *ast.Symbol {
-	return symbolTable[ast.InternalSymbolNameIndex]
+func getIndexSymbolFromSymbolTable(symbolTable *ast.SymbolTable) *ast.Symbol {
+	return symbolTable.Get(ast.InternalSymbolNameIndex)
 }
 
 // Indicates whether the result of an `Expression` will be unused.
@@ -1632,9 +1632,9 @@ func introducesArgumentsExoticObject(node *ast.Node) bool {
 	return false
 }
 
-func symbolsToArray(symbols ast.SymbolTable) []*ast.Symbol {
+func symbolsToArray(symbols *ast.SymbolTable) []*ast.Symbol {
 	var result []*ast.Symbol
-	for id, symbol := range symbols {
+	for id, symbol := range symbols.All() {
 		if !isReservedMemberName(id) {
 			result = append(result, symbol)
 		}

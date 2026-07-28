@@ -13,8 +13,8 @@ type Symbol struct {
 	Name             string
 	Declarations     []*Node
 	ValueDeclaration *Node
-	Members          SymbolTable
-	Exports          SymbolTable
+	Members          *SymbolTable
+	Exports          *SymbolTable
 	id               atomic.Uint64
 	Parent           *Symbol
 	ExportSymbol     *Symbol
@@ -40,9 +40,7 @@ func (s *Symbol) CombinedLocalAndExportSymbolFlags() SymbolFlags {
 	return s.Flags
 }
 
-// SymbolTable
-
-type SymbolTable map[string]*Symbol
+// Internal symbol names
 
 const InternalSymbolNamePrefix = "\xFE" // Invalid UTF8 sequence, will never occur as IdentifierName
 

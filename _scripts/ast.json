@@ -923,7 +923,7 @@
         "LocalsContainerBase": {
             "fields": {
                 "Locals": {
-                    "type": "SymbolTable",
+                    "type": "*SymbolTable",
                     "goOnly": true
                 },
                 "NextContainer": {

@@ -521,7 +521,7 @@ func (r *EmitResolver) IsImportRequiredByAugmentation(decl *ast.ImportDeclaratio
 	r.checkerMu.Lock()
 	defer r.checkerMu.Unlock()
 	exports := r.checker.getExportsOfModule(file.Symbol)
-	for s := range maps.Values(exports) {
+	for s := range exports.Values() {
 		merged := r.checker.getMergedSymbol(s)
 		if merged != s {
 			if len(merged.Declarations) > 0 {
@@ -1060,7 +1060,7 @@ func (r *EmitResolver) CreateLateBoundIndexSignatures(emitContext *printer.EmitC
 	instanceIndexSymbol := r.checker.getIndexSymbol(sym)
 	var instanceInfos []*IndexInfo
 	if instanceIndexSymbol != nil {
-		siblingSymbols := slices.Collect(maps.Values(r.checker.getMembersOfSymbol(sym)))
+		siblingSymbols := slices.Collect(r.checker.getMembersOfSymbol(sym).Values())
 		instanceInfos = r.checker.getIndexInfosOfIndexSymbol(instanceIndexSymbol, siblingSymbols)
 	}
 

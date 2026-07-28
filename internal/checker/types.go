@@ -203,7 +203,7 @@ type AliasSymbolLinks struct {
 // Links for module symbols
 
 type ModuleSymbolLinks struct {
-	resolvedExports       ast.SymbolTable      // Resolved exports of module or combined early- and late-bound static members of a class.
+	resolvedExports       *ast.SymbolTable     // Resolved exports of module or combined early- and late-bound static members of a class.
 	typeOnlyExportStarMap map[string]*ast.Node // Set on a module symbol when some of its exports were resolved through a 'export type * from "mod"' declaration
 	exportsChecked        bool
 }
@@ -280,7 +280,7 @@ const (
 	MembersOrExportsResolutionKindResolvedMembers MembersOrExportsResolutionKind = 1
 )
 
-type MembersAndExportsLinks [2]ast.SymbolTable // Indexed by MembersOrExportsResolutionKind
+type MembersAndExportsLinks [2]*ast.SymbolTable // Indexed by MembersOrExportsResolutionKind
 
 // Links for synthetic spread properties
 
@@ -921,7 +921,7 @@ func (t *ConstrainedType) AsConstrainedType() *ConstrainedType { return t }
 
 type StructuredType struct {
 	ConstrainedType
-	members            ast.SymbolTable
+	members            *ast.SymbolTable
 	properties         []*ast.Symbol
 	signatures         []*Signature // Signatures (call + construct)
 	callSignatureCount int          // Count of call signatures
@@ -1007,10 +1007,10 @@ type InterfaceType struct {
 	declaredMembersResolved     bool
 	resolvedBaseConstructorType *Type
 	resolvedBaseTypes           []*Type
-	declaredMembers             ast.SymbolTable // Declared members
-	declaredCallSignatures      []*Signature    // Declared call signatures
-	declaredConstructSignatures []*Signature    // Declared construct signatures
-	declaredIndexInfos          []*IndexInfo    // Declared index signatures
+	declaredMembers             *ast.SymbolTable // Declared members
+	declaredCallSignatures      []*Signature     // Declared call signatures
+	declaredConstructSignatures []*Signature     // Declared construct signatures
+	declaredIndexInfos          []*IndexInfo     // Declared index signatures
 }
 
 func (t *InterfaceType) AsInterfaceType() *InterfaceType { return t }
@@ -1123,8 +1123,8 @@ type EvolvingArrayType struct {
 type UnionOrIntersectionType struct {
 	StructuredType
 	types                                       []*Type
-	propertyCache                               ast.SymbolTable
-	propertyCacheWithoutFunctionPropertyAugment ast.SymbolTable
+	propertyCache                               *ast.SymbolTable
+	propertyCacheWithoutFunctionPropertyAugment *ast.SymbolTable
 	resolvedProperties                          []*ast.Symbol
 }
 

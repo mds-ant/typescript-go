@@ -137,7 +137,7 @@ type ModifiersBase struct {
 }
 
 type LocalsContainerBase struct {
-	Locals        SymbolTable
+	Locals        *SymbolTable
 	NextContainer *Node
 }
 

@@ -131,8 +131,8 @@ func tryGetModuleNameFromAmbientModule(moduleSymbol *ast.Symbol, checker Checker
 			continue
 		}
 
-		sym, ok := possibleContainer.Symbol().Exports[ast.InternalSymbolNameExportEquals]
-		if !ok || sym == nil {
+		sym := possibleContainer.Symbol().Exports.Get(ast.InternalSymbolNameExportEquals)
+		if sym == nil {
 			continue
 		}
 		exportAssignmentDecl := sym.ValueDeclaration

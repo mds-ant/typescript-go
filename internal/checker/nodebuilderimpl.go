@@ -777,15 +777,15 @@ func (b *NodeBuilderImpl) createAccessFromSymbolChain(chain []*ast.Symbol, index
 			exports := b.ch.getExportsOfSymbol(parent)
 			if exports != nil {
 				// avoid exhaustive iteration in the common case
-				res, ok := exports[symbol.Name]
-				if symbol.Name != ast.InternalSymbolNameExportEquals && !isLateBoundName(symbol.Name) && ok && res != nil && b.ch.getSymbolIfSameReference(res, symbol) != nil {
+				res := exports.Get(symbol.Name)
+				if symbol.Name != ast.InternalSymbolNameExportEquals && !isLateBoundName(symbol.Name) && res != nil && b.ch.getSymbolIfSameReference(res, symbol) != nil {
 					symbolName = symbol.Name
 				} else {
 					results := make(map[*ast.Symbol]string, 1)
-					for name, ex := range exports {
+					for name, ex := range exports.All() {
 						if b.ch.getSymbolIfSameReference(ex, symbol) != nil && !isLateBoundName(name) && name != ast.InternalSymbolNameExportEquals {
 							results[ex] = name
-							// break // must collect all results and sort them - exports are randomly iterated
+							// break // must collect all results and sort them - the table's iteration order is not meaningful
 						}
 					}
 					resultSymbols := slices.Collect(maps.Keys(results))
@@ -821,8 +821,8 @@ func (b *NodeBuilderImpl) createAccessFromSymbolChain(chain []*ast.Symbol, index
 	b.ctx.approximateLength += len(symbolName) + 1
 
 	if (b.ctx.flags&nodebuilder.FlagsForbidIndexedAccessSymbolReferences == 0) && parent != nil &&
-		b.ch.getMembersOfSymbol(parent) != nil && b.ch.getMembersOfSymbol(parent)[symbol.Name] != nil &&
-		b.ch.getSymbolIfSameReference(b.ch.getMembersOfSymbol(parent)[symbol.Name], symbol) != nil {
+		b.ch.getMembersOfSymbol(parent) != nil && b.ch.getMembersOfSymbol(parent).Get(symbol.Name) != nil &&
+		b.ch.getSymbolIfSameReference(b.ch.getMembersOfSymbol(parent).Get(symbol.Name), symbol) != nil {
 		// Should use an indexed access
 		lhs := b.createAccessFromSymbolChain(chain, index-1, stopper, overrideTypeArguments)
 		if ast.IsIndexedAccessTypeNode(lhs) {
@@ -1111,8 +1111,8 @@ func (b *NodeBuilderImpl) getSymbolChain(symbol *ast.Symbol, meaning ast.SymbolF
 				parentChain := b.getSymbolChain(parent, getQualifiedLeftMeaning(meaning), false, yieldModuleSymbol)
 				if len(parentChain) > 0 {
 					if parent.Exports != nil {
-						exported, ok := parent.Exports[ast.InternalSymbolNameExportEquals]
-						if ok && b.ch.getSymbolIfSameReference(exported, symbol) != nil {
+						exported := parent.Exports.Get(ast.InternalSymbolNameExportEquals)
+						if exported != nil && b.ch.getSymbolIfSameReference(exported, symbol) != nil {
 							// parentChain root _is_ symbol - symbol is a module export=, so it kinda looks like it's own parent
 							// No need to lookup an alias for the symbol in itself
 							accessibleSymbolChain = parentChain

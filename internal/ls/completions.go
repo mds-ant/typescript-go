@@ -1315,13 +1315,13 @@ func (l *LanguageService) getCompletionData(
 		completionKind = CompletionKindNone
 		isNewIdentifierLocation = false
 		localSymbol := localsContainer.Symbol()
-		var localExports ast.SymbolTable
+		var localExports *ast.SymbolTable
 		if localSymbol != nil {
 			localExports = localSymbol.Exports
 		}
-		for name, symbol := range localsContainer.Locals() {
+		for name, symbol := range localsContainer.Locals().All() {
 			symbols = append(symbols, symbol)
-			if _, ok := localExports[name]; ok {
+			if localExports.Get(name) != nil {
 				symbolId := ast.GetSymbolId(symbol)
 				symbolToSortTextMap[symbolId] = SortTextOptionalMember
 			}

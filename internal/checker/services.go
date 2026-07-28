@@ -1,7 +1,6 @@
 package checker
 
 import (
-	"maps"
 	"slices"
 	"strings"
 
@@ -24,7 +23,7 @@ func (c *Checker) getSymbolsInScope(location *ast.Node, meaning ast.SymbolFlags)
 		return nil
 	}
 
-	symbols := make(ast.SymbolTable)
+	symbols := ast.NewSymbolTable()
 	isStaticSymbol := false
 
 	// Copy the given symbol into symbol tables if the symbol has the given meaning
@@ -35,23 +34,23 @@ func (c *Checker) getSymbolsInScope(location *ast.Node, meaning ast.SymbolFlags)
 			// We will copy all symbol regardless of its reserved name because
 			// symbolsToArray will check whether the key is a reserved name and
 			// it will not copy symbol with reserved name to the array
-			if _, ok := symbols[id]; !ok {
-				symbols[id] = symbol
+			if symbols.Get(id) == nil {
+				symbols.Set(id, symbol)
 			}
 		}
 	}
 
-	copySymbols := func(source ast.SymbolTable, meaning ast.SymbolFlags) {
+	copySymbols := func(source *ast.SymbolTable, meaning ast.SymbolFlags) {
 		if meaning != 0 {
-			for _, symbol := range source {
+			for _, symbol := range source.All() {
 				copySymbol(symbol, meaning)
 			}
 		}
 	}
 
-	copyLocallyVisibleExportSymbols := func(source ast.SymbolTable, meaning ast.SymbolFlags) {
+	copyLocallyVisibleExportSymbols := func(source *ast.SymbolTable, meaning ast.SymbolFlags) {
 		if meaning != 0 {
-			for _, symbol := range source {
+			for _, symbol := range source.All() {
 				// Similar condition as in `resolveNameHelper`
 				if ast.GetDeclarationOfKind(symbol, ast.KindExportSpecifier) == nil &&
 					ast.GetDeclarationOfKind(symbol, ast.KindNamespaceExport) == nil &&
@@ -114,7 +113,7 @@ func (c *Checker) getSymbolsInScope(location *ast.Node, meaning ast.SymbolFlags)
 
 	populateSymbols()
 
-	delete(symbols, ast.InternalSymbolNameThis) // Not a symbol, a keyword
+	symbols.Delete(ast.InternalSymbolNameThis) // Not a symbol, a keyword
 	return symbolsToArray(symbols)
 }
 
@@ -123,7 +122,7 @@ func (c *Checker) GetExportsOfModule(symbol *ast.Symbol) []*ast.Symbol {
 }
 
 func (c *Checker) ForEachExportAndPropertyOfModule(moduleSymbol *ast.Symbol, cb func(*ast.Symbol, string)) {
-	for key, exportedSymbol := range c.getExportsOfModule(moduleSymbol) {
+	for key, exportedSymbol := range c.getExportsOfModule(moduleSymbol).All() {
 		if !isReservedMemberName(key) {
 			cb(exportedSymbol, key)
 		}
@@ -144,7 +143,7 @@ func (c *Checker) ForEachExportAndPropertyOfModule(moduleSymbol *ast.Symbol, cb 
 	if reducedType.flags&TypeFlagsStructuredType == 0 {
 		return
 	}
-	for name, symbol := range c.resolveStructuredTypeMembers(reducedType).members {
+	for name, symbol := range c.resolveStructuredTypeMembers(reducedType).members.All() {
 		if c.isNamedMember(symbol, name) {
 			cb(symbol, name)
 		}
@@ -202,20 +201,20 @@ func (c *Checker) GetAllPossiblePropertiesOfTypes(types []*Type) []*ast.Symbol {
 		return c.getAugmentedPropertiesOfType(unionType)
 	}
 
-	props := make(ast.SymbolTable)
+	props := ast.NewSymbolTable()
 	for _, memberType := range types {
 		augmentedProps := c.getAugmentedPropertiesOfType(memberType)
 		for _, p := range augmentedProps {
-			if _, ok := props[p.Name]; !ok {
+			if props.Get(p.Name) == nil {
 				prop := c.createUnionOrIntersectionProperty(unionType, p.Name, false /*skipObjectFunctionPropertyAugment*/)
 				// May be undefined if the property is private
 				if prop != nil {
-					props[p.Name] = prop
+					props.Set(p.Name, prop)
 				}
 			}
 		}
 	}
-	return slices.Collect(maps.Values(props))
+	return slices.Collect(props.Values())
 }
 
 func (c *Checker) IsUnknownSymbol(symbol *ast.Symbol) bool {
@@ -270,12 +269,12 @@ func (c *Checker) getAugmentedPropertiesOfType(t *Type) []*ast.Symbol {
 	}
 
 	if propsByName == nil {
-		propsByName = make(ast.SymbolTable)
+		propsByName = ast.NewSymbolTable()
 	}
 	if functionType != nil {
 		for _, p := range c.getPropertiesOfType(functionType) {
-			if _, ok := propsByName[p.Name]; !ok {
-				propsByName[p.Name] = p
+			if propsByName.Get(p.Name) == nil {
+				propsByName.Set(p.Name, p)
 			}
 		}
 	}
@@ -302,7 +301,7 @@ func (c *Checker) TryGetMemberInModuleExportsAndProperties(memberName string, mo
 
 func (c *Checker) TryGetMemberInModuleExports(memberName string, moduleSymbol *ast.Symbol) *ast.Symbol {
 	symbolTable := c.getExportsOfModule(moduleSymbol)
-	return symbolTable[memberName]
+	return symbolTable.Get(memberName)
 }
 
 func (c *Checker) shouldTreatPropertiesOfExternalModuleAsExports(resolvedExternalModuleType *Type) bool {

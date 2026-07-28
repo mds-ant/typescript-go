@@ -43,22 +43,22 @@ func GetSymbolId(symbol *Symbol) SymbolId {
 	return SymbolId(id)
 }
 
-func GetSymbolTable(data *SymbolTable) SymbolTable {
+func GetSymbolTable(data **SymbolTable) *SymbolTable {
 	if *data == nil {
-		*data = make(SymbolTable)
+		*data = NewSymbolTable()
 	}
 	return *data
 }
 
-func GetMembers(symbol *Symbol) SymbolTable {
+func GetMembers(symbol *Symbol) *SymbolTable {
 	return GetSymbolTable(&symbol.Members)
 }
 
-func GetExports(symbol *Symbol) SymbolTable {
+func GetExports(symbol *Symbol) *SymbolTable {
 	return GetSymbolTable(&symbol.Exports)
 }
 
-func GetLocals(container *Node) SymbolTable {
+func GetLocals(container *Node) *SymbolTable {
 	return GetSymbolTable(&container.LocalsContainerData().Locals)
 }
 
