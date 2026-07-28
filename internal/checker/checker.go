@@ -2496,7 +2496,8 @@ func (c *Checker) checkDeferredNodes(context *ast.SourceFile) {
 		}
 		c.checkDeferredNode(node)
 	}
-	links.deferredNodes.Clear()
+	// The set only matters until the file's deferred checks have run; release its storage
+	links.deferredNodes = collections.OrderedSet[*ast.Node]{}
 }
 
 func (c *Checker) checkDeferredNode(node *ast.Node) {
