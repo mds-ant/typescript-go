@@ -343,6 +343,7 @@ type ParserState struct {
 	diagnosticsLen              int
 	jsDiagnosticsLen            int
 	jsdocInfosLen               int
+	reparseListLen              int
 	reparsedClonesLen           int
 	statementHasAwaitIdentifier bool
 	hasParseError               bool
@@ -355,6 +356,7 @@ func (p *Parser) mark() ParserState {
 		diagnosticsLen:              len(p.diagnostics),
 		jsDiagnosticsLen:            len(p.jsDiagnostics),
 		jsdocInfosLen:               len(p.jsdocInfos),
+		reparseListLen:              len(p.reparseList),
 		reparsedClonesLen:           len(p.reparsedClones),
 		statementHasAwaitIdentifier: p.statementHasAwaitIdentifier,
 		hasParseError:               p.hasParseError,
@@ -368,6 +370,7 @@ func (p *Parser) rewind(state ParserState) {
 	p.diagnostics = p.diagnostics[0:state.diagnosticsLen]
 	p.jsDiagnostics = p.jsDiagnostics[0:state.jsDiagnosticsLen]
 	p.jsdocInfos = p.jsdocInfos[0:state.jsdocInfosLen]
+	p.reparseList = p.reparseList[0:state.reparseListLen]
 	p.reparsedClones = p.reparsedClones[0:state.reparsedClonesLen]
 	p.statementHasAwaitIdentifier = state.statementHasAwaitIdentifier
 	p.hasParseError = state.hasParseError

@@ -1,0 +1,38 @@
+callback.js(6,12): error TS2304: Cannot find name 'CB4'.
+callback.js(7,19): error TS7006: Parameter 'x' implicitly has an 'any' type.
+import.js(3,12): error TS2304: Cannot find name 'T4'.
+typedef.js(3,12): error TS2304: Cannot find name 'L4'.
+
+
+==== typedef.js (1 errors) ====
+    const a = 1, b = 2;
+    export const r = (/** @typedef {object} L4 */ a) - b;
+    /** @type {L4} */
+               ~~
+!!! error TS2304: Cannot find name 'L4'.
+    export const q = {};
+    
+==== callback.js (2 errors) ====
+    const c = 1, d = 2;
+    export const s = (/** @callback CB4
+     * @param {number} x
+     * @returns {number}
+     */ c) - d;
+    /** @type {CB4} */
+               ~~~
+!!! error TS2304: Cannot find name 'CB4'.
+    export const t = (x) => x;
+                      ~
+!!! error TS7006: Parameter 'x' implicitly has an 'any' type.
+    
+==== types.ts (0 errors) ====
+    export type T4 = { n: number };
+    
+==== import.js (1 errors) ====
+    const e = 1, f = 2;
+    export const u = (/** @import {T4} from "./types" */ e) - f;
+    /** @type {T4} */
+               ~~
+!!! error TS2304: Cannot find name 'T4'.
+    export const v = { n: 1 };
+    

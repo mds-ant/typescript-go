@@ -1,0 +1,72 @@
+//// [tests/cases/compiler/jsdocTagInDiscardedArrowSpeculation.ts] ////
+
+=== typedef.js ===
+const a = 1, b = 2;
+>a : 1
+>1 : 1
+>b : 2
+>2 : 2
+
+export const r = (/** @typedef {object} L4 */ a) - b;
+>r : number
+>(/** @typedef {object} L4 */ a) - b : number
+>(/** @typedef {object} L4 */ a) : 1
+>a : 1
+>b : 2
+
+/** @type {L4} */
+export const q = {};
+>q : L4
+>{} : {}
+
+=== callback.js ===
+const c = 1, d = 2;
+>c : 1
+>1 : 1
+>d : 2
+>2 : 2
+
+export const s = (/** @callback CB4
+>s : number
+>(/** @callback CB4 * @param {number} x * @returns {number} */ c) - d : number
+>(/** @callback CB4 * @param {number} x * @returns {number} */ c) : 1
+
+ * @param {number} x
+ * @returns {number}
+ */ c) - d;
+>c : 1
+>d : 2
+
+/** @type {CB4} */
+export const t = (x) => x;
+>t : CB4
+>(x) => x : (x: any) => any
+>x : any
+>x : any
+
+=== types.ts ===
+export type T4 = { n: number };
+>T4 : T4
+>n : number
+
+=== import.js ===
+const e = 1, f = 2;
+>e : 1
+>1 : 1
+>f : 2
+>2 : 2
+
+export const u = (/** @import {T4} from "./types" */ e) - f;
+>u : number
+>(/** @import {T4} from "./types" */ e) - f : number
+>(/** @import {T4} from "./types" */ e) : 1
+>e : 1
+>f : 2
+
+/** @type {T4} */
+export const v = { n: 1 };
+>v : T4
+>{ n: 1 } : { n: number; }
+>n : number
+>1 : 1
+
