@@ -18,7 +18,9 @@ import (
 //
 // A table is stored as a name-sorted []*Symbol (the key of an entry is its symbol's Name),
 // which is several times smaller than a Go map for the small tables that dominate. It falls
-// back to a Go map when a symbol is stored under a key other than its name.
+// back to a Go map when a symbol is stored under a key other than its name, or when
+// out-of-order insertion would make building a large sorted table quadratic (see
+// maxSortedInsertLen).
 //
 // A SymbolTable is either in sorted form (m == nil), where symbols is sorted by name and each
 // entry's key is its symbol's Name, or in map form (m != nil), where symbols is nil. Tables
@@ -27,6 +29,13 @@ type SymbolTable struct {
 	symbols []*Symbol          // sorted form; nil in map form
 	m       map[string]*Symbol // map form; nil in sorted form
 }
+
+// maxSortedInsertLen bounds the cost of building a table by insertion in arbitrary order:
+// inserting into the sorted form shifts the tail of the slice, which would be quadratic for a
+// single container with tens of thousands of members. Past this many entries, an out-of-order
+// insertion converts the table to map form. Tables built by insertion in name order (copies of
+// existing tables, instantiations) never convert, regardless of size.
+const maxSortedInsertLen = 1024
 
 func NewSymbolTable() *SymbolTable {
 	return &SymbolTable{}
@@ -108,6 +117,9 @@ func (t *SymbolTable) Set(name string, symbol *Symbol) {
 	}
 	if i, ok := t.find(name); ok {
 		t.symbols[i] = symbol
+	} else if n >= maxSortedInsertLen {
+		t.toMap()
+		t.m[name] = symbol
 	} else {
 		t.symbols = slices.Insert(t.symbols, i, symbol)
 	}
