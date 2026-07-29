@@ -583,15 +583,13 @@ func (b *NodeBuilderImpl) symbolToNode(symbol *ast.Symbol, meaning ast.SymbolFla
 				return name
 			}
 		}
-		if b.ch.valueSymbolLinks.Has(symbol) {
-			nameType := b.ch.valueSymbolLinks.Get(symbol).nameType
-			if nameType != nil && nameType.flags&(TypeFlagsEnumLiteral|TypeFlagsUniqueESSymbol) != 0 {
-				oldEnclosing := b.ctx.enclosingDeclaration
-				b.ctx.enclosingDeclaration = nameType.symbol.ValueDeclaration
-				result := b.f.NewComputedPropertyName(b.symbolToExpression(nameType.symbol, meaning))
-				b.ctx.enclosingDeclaration = oldEnclosing
-				return result
-			}
+		nameType := b.ch.symbolNameType(symbol)
+		if nameType != nil && nameType.flags&(TypeFlagsEnumLiteral|TypeFlagsUniqueESSymbol) != 0 {
+			oldEnclosing := b.ctx.enclosingDeclaration
+			b.ctx.enclosingDeclaration = nameType.symbol.ValueDeclaration
+			result := b.f.NewComputedPropertyName(b.symbolToExpression(nameType.symbol, meaning))
+			b.ctx.enclosingDeclaration = oldEnclosing
+			return result
 		}
 	}
 	return b.symbolToExpression(symbol, meaning)
@@ -934,11 +932,7 @@ func isDefaultBindingContext(location *ast.Node) bool {
 }
 
 func (b *NodeBuilderImpl) getNameOfSymbolFromNameType(symbol *ast.Symbol) string {
-	if b.ch.valueSymbolLinks.Has(symbol) {
-		nameType := b.ch.valueSymbolLinks.Get(symbol).nameType
-		if nameType == nil {
-			return ""
-		}
+	if nameType := b.ch.symbolNameType(symbol); nameType != nil {
 		if nameType.flags&TypeFlagsStringOrNumberLiteral != 0 {
 			var name string
 			switch v := nameType.AsLiteralType().value.(type) {
@@ -992,7 +986,7 @@ func (b *NodeBuilderImpl) getNameOfSymbolAsWritten(symbol *ast.Symbol) string {
 			// 	return symbol.Name
 			// }
 			if ast.IsComputedPropertyName(name) && symbol.CheckFlags&ast.CheckFlagsLate == 0 {
-				if b.ch.valueSymbolLinks.Has(symbol) && b.ch.valueSymbolLinks.Get(symbol).nameType != nil && b.ch.valueSymbolLinks.Get(symbol).nameType.flags&TypeFlagsStringOrNumberLiteral != 0 {
+				if nameType := b.ch.symbolNameType(symbol); nameType != nil && nameType.flags&TypeFlagsStringOrNumberLiteral != 0 {
 					result := b.getNameOfSymbolFromNameType(symbol)
 					if len(result) > 0 {
 						return result
@@ -2440,10 +2434,7 @@ func (b *NodeBuilderImpl) getPropertyNameNodeForSymbol(symbol *ast.Symbol) *ast.
 
 // See getNameForSymbolFromNameType for a stringy equivalent
 func (b *NodeBuilderImpl) getPropertyNameNodeForSymbolFromNameType(symbol *ast.Symbol, singleQuote bool, stringNamed bool, isMethod bool) *ast.Node {
-	if !b.ch.valueSymbolLinks.Has(symbol) {
-		return nil
-	}
-	nameType := b.ch.valueSymbolLinks.TryGet(symbol).nameType
+	nameType := b.ch.symbolNameType(symbol)
 	if nameType == nil {
 		return nil
 	}
