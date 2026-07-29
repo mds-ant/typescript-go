@@ -20764,13 +20764,13 @@ func (c *Checker) instantiateSymbol(symbol *ast.Symbol, m *TypeMapper) *ast.Symb
 	if symbol == nil {
 		return nil
 	}
-	links := c.valueSymbolLinks.Get(symbol)
+	links := c.valueSymbolLinks.TryGet(symbol)
 	if m != nil && m.MapsThisOnly() && isThisless(symbol) {
 		return symbol
 	}
 	// If the type of the symbol is already resolved, and if that type could not possibly
 	// be affected by instantiation, simply return the symbol itself.
-	if links.resolvedType != nil && !c.couldContainTypeVariables(links.resolvedType) {
+	if links != nil && links.resolvedType != nil && !c.couldContainTypeVariables(links.resolvedType) {
 		if symbol.Flags&ast.SymbolFlagsSetAccessor == 0 {
 			return symbol
 		}
